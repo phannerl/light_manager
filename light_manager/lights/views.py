@@ -1,5 +1,10 @@
 from django.shortcuts import render
+from django.views import View
+from django.http import HttpResponse, HttpResponseNotFound, JsonResponse
+import json
+from django.views.decorators.csrf import csrf_exempt
 
+from .models import Home, Room, Light
 
 def light_handle(light_brightness_list_org, expected_brightness_org) -> list[list[int]]:
     # input:  [200, 300, 600, 700], 700
@@ -14,18 +19,36 @@ def light_handle(light_brightness_list_org, expected_brightness_org) -> list[lis
             elif light_brightness == expected_brightness:
                 if previous_result:
                     final_result += [previous_result +
-                                     [light_brightness]]
+                                    [light_brightness]]
                 else:
                     final_result += [[light_brightness]]
                 continue
             else:
                 stack.append((light_brightness_list[i:], expected_brightness -
-                             light_brightness, previous_result + [light_brightness]))
+                            light_brightness, previous_result + [light_brightness]))
     return final_result
 
+class LightCalculation(View):
+    @csrf_exempt
+    def post(self, request):
+        data = json.loads(request.body)
+        light_brightness_list = data['LightBrightness']
+        expected_brightness = data['ExpectedBrightness']
+        list_of_light_brightness = sorted(light_brightness_list)
+        return HttpResponse(light_handle(list_of_light_brightness, expected_brightness))
 
-if __name__ == "__main__":
-    light_brightness_list = map(int, input('LightBrightness').split(' '))
-    expected_brightness = int(input('expectedBrightness'))
-    list_of_light_brightness = sorted(light_brightness_list)
-    print(light_handle(list_of_light_brightness, expected_brightness))
+class RoomDetailView(View):
+    def get(self, request, id):
+        lights = list(Light.objects.filter(room=id))
+        print(lights)
+        if lights:
+            light_data = [{
+                "room": i.room.id,
+                "name": i.name,
+                "color": i.color
+            } for i in lights]
+            return JsonResponse({'lights': light_data}, safe=False)
+        else:
+            return HttpResponseNotFound()
+    
+
